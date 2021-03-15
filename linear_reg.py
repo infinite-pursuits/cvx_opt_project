@@ -52,9 +52,14 @@ Z = np.hstack([X1s[:, 2*i:2*(i+1)].T@X1s[:, 2*i:2*(i+1)]@theta
                for i, theta in enumerate(thetas)]).T
 norm = 2
 objective = cp.Minimize(cp.norm(X1s.T@s - Z, norm))
-constraints = []
+constraints = [0<=s,s<=400]
+#constraints = [np.min(target)<=s, s<=np.max(target)]
+#constraints = []
 prob = cp.Problem(objective, constraints)
 
 result = prob.solve(solver=cp.SCS)
 print(np.abs(target-s.value).mean())
 print(np.min(np.abs(target-s.value)), np.max(np.abs(target-s.value)))
+print(target-s.value)
+print(np.min(target),np.max(target))
+print('Done')

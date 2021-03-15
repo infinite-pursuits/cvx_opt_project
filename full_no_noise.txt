@@ -1,0 +1,2 @@
+Namespace(cutoff=None, cutoff_n=0, ntype=1, wpath='full_no_noise.txt', noise_params=['0.0001', '2', '0'])
+223.36515505790248 135.0253239884609

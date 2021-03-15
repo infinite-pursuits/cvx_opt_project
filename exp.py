@@ -3,10 +3,9 @@ from sklearn.linear_model import LinearRegression
 import numpy as np
 import cvxpy as cp
 import perturbation as ptb
-
+import argparse
 
 csv_path = 'cancer_reg.csv'
-write_path = 'cancer_reg_params.csv'
 rng = np.random.default_rng(12345)
 
 
@@ -40,12 +39,13 @@ def publish_regressors(Xs, target, cols, noise_func=None, **noise_kwargs):
         reg.fit(X1, target)
         preds = reg.predict(X1)
         theta = reg.coef_
+        #print("intercepts: ",reg.intercept_)
         if noise_func is not None:
             noise = noise_func(**noise_kwargs)
             theta += noise
         thetas.append(theta)
-        print(col, reg.coef_, reg.score(X1, target),
-              np.abs(target-preds).mean())
+        #print(col, reg.coef_, reg.score(X1, target),
+        #      np.abs(target-preds).mean())
     X1s = np.vstack(X1s).T
     return X1s, thetas
 
@@ -63,16 +63,45 @@ def attack(Xs, thetas, norm=2):
 
 
 if __name__ == '__main__':
-    cutoff = False
-    cutoff_n = 20
-    Xs, target, cols = read_data(cutoff, cutoff_n)
-    # fn = ptb.normal
-    # kwargs = {'sigma': 0.01, 'size': 2}
-    # fn = ptb.trunc_normal
-    # kwargs = {'b': 0.02, 'scale': 0.01, 'size': 2}
-    fn = ptb.laplace
-    kwargs = {'scale': 0.0001, 'size': 2}
-    Xs, thetas = publish_regressors(Xs, target, cols, fn, **kwargs)
-    rec = attack(Xs, thetas)
-    print(np.abs(target-rec).mean())
-    print(np.min(np.abs(target-rec)), np.max(np.abs(target-rec)))
+    parser = argparse.ArgumentParser(description='Input values')
+    parser.add_argument('--cutoff','-c',type=bool)
+    parser.add_argument('--cutoff_n','-cn',type=int)
+    parser.add_argument('--ntype','-nt',help='Noise type',type=int)
+    parser.add_argument('--wpath', '-wp', help='Write path',type=str)
+    parser.add_argument('--noise_params', '-np',help='Noise parameters',nargs='+')
+    args = parser.parse_args()
+
+    means = []
+    mins = []
+    maxs = []
+    cutoff = args.cutoff
+    cutoff_n = args.cutoff_n
+
+    noises = {0:ptb.normal, 1:ptb.laplace, 2:ptb.trunc_normal,-1:None}
+    ntype = args.ntype
+    fn = noises[ntype]
+    kwargs = {}
+    if fn is not None:
+        kwargs_dict = {0:(['sigma', 'size', 'mu'],[float,  int,float]),
+                       1:(['scale', 'size', 'loc'],[float,int,float]),
+                       2: (['b', 'scale', 'size', 'loc', 'a'],[float,float,int,float,float])}
+        kwargs_list = kwargs_dict[ntype][0]
+        kwargs_type = kwargs_dict[ntype][1]
+        for j,l_i in enumerate(args.noise_params):
+            kwargs[kwargs_list[j]] = kwargs_type[j](l_i)
+        print('kwargs : ', kwargs)
+
+    for i in range(10):
+        Xs, target, cols = read_data(cutoff, cutoff_n)
+        Xs, thetas = publish_regressors(Xs, target, cols, fn, **kwargs)
+        rec = attack(Xs, thetas)
+        means.append(np.abs(target-rec).mean())
+        mins.append(np.min(np.abs(target-rec)))
+        maxs.append(np.max(np.abs(target-rec)))
+
+    mean = np.mean(means)
+    std = np.std(means)
+    print(means, mins, maxs)
+    with open(args.wpath, 'w+') as f:
+        f.write(str(args) + '\n')
+        f.write(str(mean) + ' ' + str(std) + '\n')
