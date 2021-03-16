@@ -1,2 +1,0 @@
-Namespace(cutoff=None, cutoff_n=0, ntype=1, wpath='full_noise.txt', noise_params=['0.00001', '2', '0'])
-92.48084369149129 57.873556850830205

@@ -1,0 +1,2 @@
+Namespace(cutoff=True, cutoff_n=20, ntype=0, wpath='results/cutoff_20_mu_0_sig_0.001_gaussian_noise.txt', noise_params=['0.001', '2', '0'])
+189.895433896967 16.85090123102588

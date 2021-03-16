@@ -1,0 +1,2 @@
+Namespace(cutoff=True, cutoff_n=20, ntype=1, wpath='results/cutoff_20_mu_0_scale_0.0001_laplace_noise.txt', noise_params=['0.0001', '2', '0'])
+125.7882657157606 51.698191576328654

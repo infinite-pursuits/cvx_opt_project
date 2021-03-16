@@ -21,6 +21,7 @@ def read_data(cutoff=False, n=0):
 
     Xs = np.array([data[col] for col in non_nan_cols]).T
     if cutoff:
+        print('HERE')
         assert n <= len(target)
         indices = rng.choice(len(target), n)
         Xs = Xs[indices]
