@@ -45,7 +45,8 @@ def read_data(cutoff=False, n=0, normalize=False):
 def publish_regressors(Xs, target, cols, scaler,noise_func=None, **noise_kwargs):
     X1s = []
     thetas = []
-    mses = []
+    maes = []
+    noised_maes = []
     for i, col in enumerate(cols):
         reg = LinearRegression(fit_intercept=False)
         X = Xs[:, i]
@@ -53,16 +54,19 @@ def publish_regressors(Xs, target, cols, scaler,noise_func=None, **noise_kwargs)
         X1s.append(X1.T)
         reg.fit(X1, target)
         preds = reg.predict(X1)
-        mses.append(metrics.MAE(metrics.restore(target, scaler), metrics.restore(preds,scaler)))
+        maes.append(metrics.MAE(target, preds, scaler))
         theta = reg.coef_
         if noise_func is not None:
             noise = noise_func(**noise_kwargs)
             theta += noise
+            reg.coef_ += noise
+        preds = reg.predict(X1)
+        noised_maes.append(metrics.MAE(target, preds, scaler))
         thetas.append(theta)
         # print(col, reg.coef_, reg.score(X1, target),
         #       np.abs(target-preds).mean())
     X1s = np.vstack(X1s).T
-    return X1s, thetas,mses
+    return X1s, thetas, maes, noised_maes
 
 
 def attack(Xs, thetas, norm=2):
@@ -101,8 +105,8 @@ if __name__ == '__main__':
     fn = ptb.laplace
     kwargs = {'scale': 0.0001, 'size': 2}
     # Xs, thetas = publish_regressors(Xs, target, cols, fn, **kwargs)
-    Xs, thetas, _ = publish_regressors(Xs, target, cols, scaler)
-
+    Xs, thetas, _, _ = publish_regressors(Xs, target, cols, scaler)
+    
     rec = attack(Xs, thetas)
     print('MAE:', metrics.MAE(target, rec, scaler))
     print('min:', metrics.absmin(target, rec, scaler))
@@ -119,23 +123,15 @@ if __name__ == '__main__':
     reps = 50
     means = []
     stds = []
-    mse_orig = []
-    std_orig = []
     for n in ns:
         maes = []
-        mses = []
         for _ in range(reps):
             Xs, target, cols, scaler = read_data(True, n, normalize=True)
-            Xs, thetas, mse = publish_regressors(Xs, target, cols, scaler)
+            Xs, thetas, _, _ = publish_regressors(Xs, target, cols, scaler)
             rec = attack(Xs, thetas)
             maes.append(metrics.MAE(target, rec, scaler))
-            if n==20:
-                mses.append(mse)
         means.append(round(np.mean(maes),2))
         stds.append(round(np.std(maes),3))
-        if n==20:
-            mse_orig.append(np.mean(mses, axis=0))
-            std_orig.append(np.std(mses, axis=0))
         print(np.mean(maes), np.std(maes))
     plt.errorbar(ns, means, stds, solid_capstyle='projecting', capsize=5,linestyle='None', marker='^')
     plt.xlabel('Dataset Size')
@@ -154,24 +150,25 @@ if __name__ == '__main__':
     reps = 10
     means_lap = []
     stds_lap = []
-    mses_ln_mean = []
-    mses_ln_std = []
+    ln_bn_mae_means = []
+    ln_an_mae_means = []
     fn = ptb.laplace
     for scale in scales:
         maes = []
-        mses = []
+        bn_maes = []
+        an_maes = []
         for _ in range(reps):
             Xs, target, cols, scaler = read_data(True, n, normalize=True)
             kwargs = {'scale': scale, 'size': 2}
-            Xs, thetas, mse = publish_regressors(Xs, target, cols, scaler, fn, **kwargs)
+            Xs, thetas, bn_mae, an_mae = publish_regressors(Xs, target, cols, scaler, fn, **kwargs)
             rec = attack(Xs, thetas)
             maes.append(metrics.MAE(target, rec, scaler))
-            mses.append(mse)
+            bn_maes.append(bn_mae)
+            an_maes.append(an_mae)
         means_lap.append(round(np.mean(maes),2))
         stds_lap.append(round(np.std(maes),3))
-        mses_ln_mean.append(np.mean(mses, axis=0))
-        mses_ln_std.append(np.std(mses, axis=0))
-        print(np.mean(maes), np.std(maes), len(mses_ln_mean[0]))
+        ln_bn_mae_means.append(np.mean(bn_maes, axis=0))
+        ln_an_mae_means.append(np.mean(an_maes, axis=0))
     plt.errorbar(scales, means_lap, stds_lap, solid_capstyle='projecting', capsize=3,linestyle='None', marker='^')
     plt.xlabel('Scale')
     plt.ylabel('MAE')
@@ -187,23 +184,25 @@ if __name__ == '__main__':
     reps = 10
     means_gauss = []
     stds_gauss = []
-    mses_gn_mean = []
-    mses_gn_std = []
+    gn_bn_mae_means = []
+    gn_an_mae_means = []
     fn = ptb.normal
     for sigma in sigmas:
         maes = []
-        mses = []
+        bn_maes = []
+        an_maes = []
         for _ in range(reps):
             Xs, target, cols, scaler = read_data(True, n, normalize=True)
             kwargs = {'sigma': sigma, 'size': 2}
-            Xs, thetas, mse = publish_regressors(Xs, target, cols, scaler, fn, **kwargs)
+            Xs, thetas, bn_mae, an_mae = publish_regressors(Xs, target, cols, scaler, fn, **kwargs)
             rec = attack(Xs, thetas)
             maes.append(metrics.MAE(target, rec, scaler))
-            mses.append(mse)
+            bn_maes.append(bn_mae)
+            an_maes.append(an_mae)
         means_gauss.append(round(np.mean(maes),2))
         stds_gauss.append(round(np.std(maes),3))
-        mses_gn_mean.append(np.mean(mses, axis=0))
-        mses_gn_std.append(np.std(mses, axis=0))
+        gn_bn_mae_means.append(np.mean(bn_maes, axis=0))
+        gn_an_mae_means.append(np.mean(an_maes, axis=0))
         print(np.mean(maes), np.std(maes))
     plt.errorbar(scales, means_gauss, stds_gauss,solid_capstyle='projecting', capsize=3, linestyle='None', marker='^')
     plt.xlabel('Sigma')
@@ -220,23 +219,25 @@ if __name__ == '__main__':
     reps = 10
     means_trunc = []
     stds_trunc = []
-    mses_tn_mean = []
-    mses_tn_std = []
+    tn_bn_mae_means = []
+    tn_an_mae_means = []
     fn = ptb.trunc_normal
     for scale in scales:
         maes = []
-        mses = []
+        bn_maes = []
+        an_maes = []
         for _ in range(reps):
             Xs, target, cols, scaler = read_data(True, n, normalize=True)
             kwargs = {'b': 1/n, 'scale': scale, 'size': 2}
-            Xs, thetas, mse = publish_regressors(Xs, target, cols, scaler, fn, **kwargs)
+            Xs, thetas, bn_mae, an_mae = publish_regressors(Xs, target, cols, scaler, fn, **kwargs)
             rec = attack(Xs, thetas)
             maes.append(metrics.MAE(target, rec, scaler))
-            mses.append(mse)
+            bn_maes.append(bn_mae)
+            an_maes.append(an_mae)
         means_trunc.append(round(np.mean(maes),2))
         stds_trunc.append(round(np.std(maes),3))
-        mses_tn_mean.append(np.mean(mses, axis=0))
-        mses_tn_std.append(np.std(mses, axis=0))
+        tn_bn_mae_means.append(np.mean(bn_maes, axis=0))
+        tn_an_mae_means.append(np.mean(an_maes, axis=0))
         print(np.mean(maes), np.std(maes))
     plt.errorbar(scales, means_trunc, stds_trunc, solid_capstyle='projecting', capsize=3,linestyle='None', marker='^')
     plt.xlabel('Scale')
@@ -248,18 +249,14 @@ if __name__ == '__main__':
     print('Truncated Normal')
     print(tabulate({"Scale": scales, "MAE": means_trunc, "Std Deviation": stds_trunc}, headers="keys", tablefmt="latex"))
 
-
-    def plot(final_mean, final_std,s,scales, mse_orig, std_orig):
+    def plot(an_mean, s, scales, bn_mean):
         import matplotlib.colors as colors
 
         colors_list = list(colors._colors_full_map.values())
 
         plt.figure()
-        #plt.plot(list(range(27)), mse_orig[0],color=colors_list[0], label='no noise')
-
-        for i in [0,3,6]:
-
-            m = final_mean[i]/mse_orig[0] # we are actually calculating MAE
+        for i in [0, 3, 6]:
+            m = an_mean[i]/bn_mean[i]
             plt.plot(list(range(27)), m, color=colors_list[i + 150], label=str(scales[i]))
 
         plt.xlabel('Regressors based on feature on the x axis')
@@ -269,6 +266,6 @@ if __name__ == '__main__':
         plt.show()
         plt.close()
 
-    plot(mses_ln_mean, mses_ln_std,'laplace',scales, mse_orig, std_orig)
-    plot(mses_gn_mean, mses_gn_std, 'gaussian', sigmas, mse_orig, std_orig)
-    plot(mses_tn_mean, mses_tn_std, 'truncated_normal', scales, mse_orig, std_orig)
+    plot(ln_an_mae_means, 'laplace', scales, ln_bn_mae_means)
+    plot(gn_an_mae_means, 'gaussian', scales, gn_bn_mae_means)
+    plot(tn_an_mae_means, 'truncated_normal', scales, tn_bn_mae_means)
